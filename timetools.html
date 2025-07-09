@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시계 & 타이머</title>
+    <link id="favicon" rel="icon" href="#">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSans.css">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        #app-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        #clock-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        #main-panel {
+            flex: 2;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .time-display {
+            font-size: 2.5rem;
+            font-family: 'Noto Sans KR', sans-serif;
+            margin: 15px 0;
+            white-space: nowrap;
+        }
+        #current-time-display { font-size: 2.2rem; }
+        #current-date-display { font-size: 1rem; color: #6c757d; }
+        .world-clock-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .world-clock-item:last-child { border-bottom: none; }
+        .world-clock-info h5 { margin: 0; font-size: 1.1rem; }
+        .world-clock-info p { margin: 0; font-size: 0.9rem; color: #6c757d; }
+        .scrollable-list { max-height: 180px; overflow-y: auto; text-align: left; }
+        #stopwatch, #timer { text-align: center; }
+
+        /* 반응형 레이아웃 */
+        @media (max-width: 992px) {
+            #app-container {
+                flex-direction: column;
+            }
+            .time-display { font-size: 2rem; }
+            #current-time-display { font-size: 1.8rem; }
+        }
+        @media (max-width: 576px) {
+            .time-display { font-size: 1.5rem; }
+            .btn-group .btn { margin: 0 2px; padding: .5rem .3rem; font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <!-- 왼쪽 시계 패널 -->
+        <div id="clock-panel">
+            <h4 class="mb-3">현재 시간 (서울)</h4>
+            <div id="current-time-display"></div>
+            <div id="current-date-display"></div>
+            <hr class="my-4">
+            <h4 class="mb-3">세계 시각</h4>
+            <div class="input-group mb-3">
+                <select id="world-clock-select" class="form-select"></select>
+                <button id="add-clock-btn" class="btn btn-primary">추가</button>
+            </div>
+            <div id="world-clocks-container"></div>
+        </div>
+
+        <!-- 오른쪽 메인 패널 -->
+        <div id="main-panel">
+            <ul class="nav nav-tabs nav-fill" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#stopwatch">스톱워치</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#timer">타이머</button></li>
+            </ul>
+            <div class="tab-content p-3">
+                <div class="tab-pane fade show active" id="stopwatch">
+                    <div class="time-display" id="stopwatch-display">00:00:00.000</div>
+                    <div class="btn-group">
+                        <button id="start-btn" class="btn btn-primary">시작</button>
+                        <button id="stop-btn" class="btn btn-danger">중지</button>
+                        <button id="lap-btn" class="btn btn-info">랩</button>
+                        <button id="reset-btn" class="btn btn-secondary">재설정</button>
+                    </div>
+                    <ol id="laps-list" class="list-group mt-4 scrollable-list"></ol>
+                </div>
+                <div class="tab-pane fade" id="timer">
+                    <div class="time-display" id="timer-display">00:00:00</div>
+                    <div class="d-flex justify-content-center align-items-center my-3 timer-inputs">
+                        <input type="number" id="hours-input" class="form-control mx-1" min="0" max="99" placeholder="시">
+                        <span>:</span>
+                        <input type="number" id="minutes-input" class="form-control mx-1" min="0" max="59" placeholder="분">
+                        <span>:</span>
+                        <input type="number" id="seconds-input" class="form-control mx-1" min="0" max="59" placeholder="초">
+                    </div>
+                    <div class="btn-group">
+                        <button id="timer-start-btn" class="btn btn-primary">시작</button>
+                        <button id="timer-stop-btn" class="btn btn-danger">중지</button>
+                        <button id="timer-reset-btn" class="btn btn-secondary">재설정</button>
+                        <button id="timer-save-btn" class="btn btn-success">저장</button>
+                    </div>
+                    <hr>
+                    <h5 class="mt-3">저장된 타이머</h5>
+                    <ul id="saved-timers-list" class="list-group scrollable-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const getEl = id => document.getElementById(id);
+
+        // --- 시계 로직 ---
+        const currentTimeDisplay = getEl('current-time-display');
+        const currentDateDisplay = getEl('current-date-display');
+        const worldClockSelect = getEl('world-clock-select');
+        const addClockBtn = getEl('add-clock-btn');
+        const worldClocksContainer = getEl('world-clocks-container');
+
+        const timezones = {
+            '서울': 'Asia/Seoul',
+            '뉴욕': 'America/New_York',
+            '런던': 'Europe/London',
+            '파리': 'Europe/Paris',
+            '도쿄': 'Asia/Tokyo',
+            '시드니': 'Australia/Sydney',
+            '베이징': 'Asia/Shanghai',
+            '모스크바': 'Europe/Moscow'
+        };
+        let activeWorldClocks = ['Asia/Seoul'];
+
+        function updateCurrentTime() {
+            const now = new Date();
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            const timeString = now.toLocaleTimeString('ko-KR');
+            
+            currentTimeDisplay.textContent = timeString;
+            currentDateDisplay.textContent = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${dayNames[now.getDay()]}요일`;
+            
+            document.title = `${timeString} - 시계 & 타이머`;
+        }
+
+        function renderWorldClocks() {
+            worldClocksContainer.innerHTML = '';
+            activeWorldClocks.forEach(tz => {
+                const now = new Date();
+                const targetTime = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+                const city = Object.keys(timezones).find(key => timezones[key] === tz);
+
+                const formatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: tz,
+                    timeZoneName: 'longOffset',
+                });
+                const parts = formatter.formatToParts(now);
+                const timeZoneNamePart = parts.find(part => part.type === 'timeZoneName');
+                const offsetStr = timeZoneNamePart ? timeZoneNamePart.value.replace('GMT', 'UTC') : '';
+
+                const item = document.createElement('div');
+                item.className = 'world-clock-item';
+                item.innerHTML = `
+                    <div class="world-clock-info text-start">
+                        <h5>${city} <small class="text-muted">(${offsetStr})</small></h5>
+                        <p>${targetTime.toLocaleTimeString('ko-KR')}</p>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" data-timezone="${tz}">삭제</button>
+                `;
+                worldClocksContainer.appendChild(item);
+            });
+        }
+
+        function addWorldClock() {
+            const selectedTz = worldClockSelect.value;
+            if (selectedTz && !activeWorldClocks.includes(selectedTz)) {
+                activeWorldClocks.push(selectedTz);
+                renderWorldClocks();
+            }
+        }
+
+        worldClocksContainer.addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                const tzToDelete = e.target.dataset.timezone;
+                activeWorldClocks = activeWorldClocks.filter(tz => tz !== tzToDelete);
+                renderWorldClocks();
+            }
+        });
+
+        // --- 스톱워치 로직 ---
+        const stopwatchDisplay = getEl('stopwatch-display'), startBtn = getEl('start-btn'), stopBtn = getEl('stop-btn'), lapBtn = getEl('lap-btn'), resetBtn = getEl('reset-btn'), lapsList = getEl('laps-list');
+        let sw_startTime, sw_difference, sw_tInterval, sw_savedTime = 0, sw_running = false, lapCounter = 1;
+        const startStopwatch = () => { if (!sw_running) { sw_startTime = new Date().getTime(); sw_tInterval = setInterval(() => { const now = new Date().getTime(); sw_difference = (now - sw_startTime) + sw_savedTime; let h = Math.floor(sw_difference/3600000), m=Math.floor((sw_difference%3600000)/60000), s=Math.floor((sw_difference%60000)/1000),ms=Math.floor(sw_difference%1000); stopwatchDisplay.innerHTML = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(3,'0')}`; }, 1); sw_running = true; toggleStopwatchButtons(true); } };
+        const stopStopwatch = () => { if (sw_running) { clearInterval(sw_tInterval); sw_savedTime = sw_difference; sw_running = false; toggleStopwatchButtons(false); } };
+        const resetStopwatch = () => { clearInterval(sw_tInterval); sw_savedTime = 0; sw_difference = 0; sw_running = false; stopwatchDisplay.innerHTML = "00:00:00.000"; toggleStopwatchButtons(false); lapsList.innerHTML = ''; lapCounter = 1; };
+        const lapStopwatch = () => { if (sw_running) { const li = document.createElement('li'); li.className = 'list-group-item'; li.innerHTML = `<span>랩 ${lapCounter++}: ${stopwatchDisplay.innerHTML}</span><button class="btn btn-sm btn-outline-danger lap-delete-btn">삭제</button>`; lapsList.prepend(li); } };
+        const toggleStopwatchButtons = running => { startBtn.disabled = running; stopBtn.disabled = !running; lapBtn.disabled = !running; };
+        lapsList.addEventListener('click', e => { if (e.target.classList.contains('lap-delete-btn')) e.target.parentElement.remove(); });
+        startBtn.addEventListener('click', startStopwatch); stopBtn.addEventListener('click', stopStopwatch); lapBtn.addEventListener('click', lapStopwatch); resetBtn.addEventListener('click', resetStopwatch);
+
+        // --- 타이머 로직 ---
+        const timerDisplay = getEl('timer-display'), hoursInput = getEl('hours-input'), minutesInput = getEl('minutes-input'), secondsInput = getEl('seconds-input'), timerStartBtn = getEl('timer-start-btn'), timerStopBtn = getEl('timer-stop-btn'), timerResetBtn = getEl('timer-reset-btn'), timerSaveBtn = getEl('timer-save-btn'), savedTimersList = getEl('saved-timers-list');
+        let timer_tInterval, timer_timeRemaining = 0, timer_running = false, savedTimers = [];
+        const startTimer = () => { if (!timer_running) { const h = parseInt(hoursInput.value)||0, m = parseInt(minutesInput.value)||0, s = parseInt(secondsInput.value)||0; timer_timeRemaining = (h*3600+m*60+s)*1000; if (timer_timeRemaining > 0) { timer_running = true; timer_tInterval = setInterval(updateTimer, 1000); toggleTimerControls(true); } } };
+        const stopTimer = () => { if (timer_running) { clearInterval(timer_tInterval); timer_running = false; toggleTimerControls(false); } };
+        const resetTimer = () => { clearInterval(timer_tInterval); timer_running = false; timer_timeRemaining = 0; timerDisplay.innerHTML = "00:00:00"; hoursInput.value = ''; minutesInput.value = ''; secondsInput.value = ''; toggleTimerControls(false); };
+        const updateTimer = () => { if (timer_timeRemaining <= 0) { clearInterval(timer_tInterval); timer_running = false; timerDisplay.innerHTML = "시간 종료!"; toggleTimerControls(false); return; } timer_timeRemaining -= 1000; let h = Math.floor(timer_timeRemaining/3600000), m = Math.floor((timer_timeRemaining%3600000)/60000), s = Math.floor((timer_timeRemaining%60000)/1000); timerDisplay.innerHTML = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
+        const saveTimer = () => { const h = parseInt(hoursInput.value)||0, m = parseInt(minutesInput.value)||0, s = parseInt(secondsInput.value)||0; if (h>0||m>0||s>0) { savedTimers.push({id:Date.now(),h,m,s}); renderSavedTimers(); } };
+        const renderSavedTimers = () => { savedTimersList.innerHTML = ''; savedTimers.forEach(t => { const li = document.createElement('li'); li.className = 'list-group-item'; li.innerHTML = `<span>${String(t.h).padStart(2,'0')}:${String(t.m).padStart(2,'0')}:${String(t.s).padStart(2,'0')}</span><div><button class="btn btn-sm btn-outline-primary me-2 timer-load-btn" data-id="${t.id}">불러오기</button><button class="btn btn-sm btn-outline-danger timer-delete-btn" data-id="${t.id}">삭제</button></div>`; savedTimersList.append(li); }); };
+        const handleSavedTimersClick = e => { const id = e.target.dataset.id; if (!id) return; if (e.target.classList.contains('timer-load-btn')) { const t = savedTimers.find(t => t.id == id); if (t) { hoursInput.value = t.h; minutesInput.value = t.m; secondsInput.value = t.s; } } else if (e.target.classList.contains('timer-delete-btn')) { savedTimers = savedTimers.filter(t => t.id != id); renderSavedTimers(); } };
+        const toggleTimerControls = running => { timerStartBtn.disabled = running; timerStopBtn.disabled = !running; hoursInput.disabled = running; minutesInput.disabled = running; secondsInput.disabled = running; };
+        timerStartBtn.addEventListener('click', startTimer); timerStopBtn.addEventListener('click', stopTimer); timerResetBtn.addEventListener('click', resetTimer); timerSaveBtn.addEventListener('click', saveTimer); savedTimersList.addEventListener('click', handleSavedTimersClick);
+
+        // --- 초기화 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Favicon 설정
+            const favicon = getEl('favicon');
+            const emoji = '⏰';
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">${emoji}</text></svg>`;
+            favicon.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+            // 시계 초기화
+            Object.keys(timezones).forEach(city => {
+                const option = document.createElement('option');
+                option.value = timezones[city];
+                option.textContent = city;
+                worldClockSelect.appendChild(option);
+            });
+            updateCurrentTime();
+            renderWorldClocks();
+            setInterval(updateCurrentTime, 1000);
+            setInterval(renderWorldClocks, 1000);
+            addClockBtn.addEventListener('click', addWorldClock);
+
+            // 스톱워치/타이머 초기 상태
+            toggleStopwatchButtons(false);
+            toggleTimerControls(false);
+        });
+    </script>
+</body>
+</html>
